@@ -22,7 +22,7 @@ const Upload = () => {
     <div>
       <h1>Upload</h1>
       <form onSubmit={uploadData} method="post" encType="multipart/form-data">
-        <input type="file" name="file" accept="video/mp4,video/x-m4v,video/*" />
+        <input type="file" name="file" accept="video/mp4,vi-deo/x-m4v,video/*" />
         <button
           type="submit"
           className="border px-3 py-2 rounded-lg bg-green-500"
