@@ -5,6 +5,8 @@ const cors = require("cors");
 const mongoose = require("mongoose");
 const fs = require("fs");
 const request = require("request");
+const axios = require("axios");
+const { Transform } = require("stream");
 
 // Connect to database
 const connectDb = async () =>
@@ -16,27 +18,113 @@ const Video = mongoose.model(
   "video",
   new mongoose.Schema({
     title: String,
-    url: String,
+    videoUrl: String,
+    thumbnailUrl: String,
   })
 );
 
 // Middlewares
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: "*",
   })
 );
 app.use(express.json());
 
-// Routes
-app.post("/api/post-video", async (req, res) => {
-  const { url, title } = req.body;
-  const video = new Video({ url, title });
-  await video.save();
-  return res
-    .status(200)
-    .json({ success: true, message: "Video posted successfully" });
+// Firebase setup
+const multer = require("multer");
+const firebase = require("firebase/app");
+const {
+  getStorage,
+  ref,
+  uploadBytes,
+  getDownloadURL,
+} = require("firebase/storage");
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAFAKtVcLQQJTs9GMHt_W3oY3t7q9i9ouI",
+  authDomain: "video-streaming-app-81666.firebaseapp.com",
+  projectId: "video-streaming-app-81666",
+  storageBucket: "video-streaming-app-81666.appspot.com",
+  messagingSenderId: "523967552433",
+  appId: "1:523967552433:web:fa26527c8814bc78db7b90",
+};
+
+firebase.initializeApp(firebaseConfig);
+const storage = getStorage();
+const upload = multer({
+  storage: multer.memoryStorage(),
 });
+
+// Routes
+app.post(
+  "/api/post-video",
+  upload.fields([
+    { name: "video", maxCount: 1 },
+    { name: "thumbnail", maxCount: 1 },
+  ]),
+  async (req, res) => {
+    if (!req.files || !req.files.video || !req.files.thumbnail) {
+      return res.status(400).json({
+        success: false,
+        message: "No video or thumbnail found",
+      });
+    }
+
+    const videoFile = req.files.video[0];
+    const thumbnailFile = req.files.thumbnail[0];
+
+    const videoStorageRef = ref(storage, videoFile.originalname);
+    const thumbnailStorageRef = ref(storage, thumbnailFile.originalname);
+
+    const videoMetadata = {
+      contentType: "video/mp4",
+    };
+
+    const thumbnailMetadata = {
+      contentType: thumbnailFile.mimetype,
+    };
+
+    try {
+      await Promise.all([
+        uploadBytes(videoStorageRef, videoFile.buffer, videoMetadata),
+        uploadBytes(
+          thumbnailStorageRef,
+          thumbnailFile.buffer,
+          thumbnailMetadata
+        ),
+      ]);
+
+      const [videoUrl, thumbnailUrl] = await Promise.all([
+        getDownloadURL(videoStorageRef),
+        getDownloadURL(thumbnailStorageRef),
+      ]);
+
+      console.log("videoUrl : ", videoUrl, "thumbnailUrl : ", thumbnailUrl);
+
+      const video = new Video({
+        title: req.body.title,
+        videoUrl,
+        thumbnailUrl,
+      });
+
+      await video.save();
+
+      return res.status(200).json({
+        success: true,
+        message: "Video uploaded successfully",
+        data: video,
+      });
+    } catch (error) {
+      console.error("Error uploading video:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Error uploading video",
+        data: error.message,
+      });
+    }
+  }
+);
 
 app.get("/api/get-videos", async (req, res) => {
   const videos = await Video.find();
@@ -47,36 +135,61 @@ app.get("/api/get-videos", async (req, res) => {
   });
 });
 
-app.get("/video", async (req, res) => {
-  const range = req.headers.range;
-  // if (!range) {
-  //   return res.status(400).send("Requires Range header");
-  // }
 
-  const videoUrl =
-    "https://res.cloudinary.com/diouxllrj/video/upload/v1707159939/video-app-test/tqsyqk56nxd40anaw0g4.mp4";
-
-  // Fetch video from URL
-  const videoStream = request.get(videoUrl);
-
-  videoStream.on("response", (videoResponse) => {
-    const videoSize = parseInt(videoResponse.headers["content-length"], 10);
-
-    // Set appropriate headers for streaming
-    res.writeHead(206, {
-      "Content-Type": "video/mp4",
-      "Content-Length": videoSize,
-      "Accept-Ranges": "bytes",
+app.get("/api/stream-video/:videoId", async (req, res) => {
+  const video = await Video.findById(req.params.videoId);
+  if (!video) {
+    return res.status(404).json({
+      success: false,
+      message: "Video not found",
     });
+  }
 
-    // Stream the video to the client
-    videoStream.pipe(res);
-  });
+  try {
+    const videoUrl = video.videoUrl;
+    const range = req.headers.range;
 
-  videoStream.on("error", (err) => {
-    console.error("Error fetching video:", err);
-    res.status(500).send("Error fetching video");
-  });
+    if (range) {
+      const options = {
+        url: videoUrl,
+        headers: {
+          Range: range,
+        },
+      };
+
+      request.get(options)
+        .on("error", (error) => {
+          console.error("Error streaming video:", error);
+          res.status(500).json({
+            success: false,
+            message: "Error streaming video",
+            data: error.message,
+          });
+        })
+        .pipe(res);
+    } else {
+      const response = request.get(videoUrl);
+      response.on("response", (videoResponse) => {
+        if (videoResponse.headers["content-length"]) {
+          res.setHeader("Content-Type", "video/mp4");
+          res.setHeader("Content-Length", videoResponse.headers["content-length"]);
+          response.pipe(res);
+        } else {
+          console.error("Error streaming video: Content-Length header not found");
+          res.status(500).json({
+            success: false,
+            message: "Error streaming video: Content-Length header not found",
+          });
+        }
+      });
+    }
+  } catch (error) {
+    console.error("Error streaming video:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error streaming video",
+      data: error.message,
+    });
+  }
 });
-
 app.listen(port, () => console.log(`server running at port ${port}`));
