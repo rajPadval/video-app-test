@@ -9,8 +9,8 @@ const Home = () => {
 
   const fetchVideos = async () => {
     try {
-      // const res = await axios.get("https://video-app-x4ma.onrender.com/api/get-videos");
-      const res = await axios.get("http://localhost:5000/api/get-videos");
+      const res = await axios.get("https://video-app-x4ma.onrender.com/api/get-videos");
+      // const res = await axios.get("http://localhost:5000/api/get-videos");
       setVideos(res.data.data);
     } catch (error) {
       console.error("Error fetching videos:", error);
@@ -48,8 +48,8 @@ const Home = () => {
                   onClick={() => handleVideoSelect(video._id)}
                 >
                   <source
-                    // src={`https://video-app-x4ma.onrender.com/api/stream-video/${video._id}`}
-                    src={`http://localhost:5000/api/stream-video/${video._id}`}
+                    src={`https://video-app-x4ma.onrender.com/api/stream-video/${video._id}`}
+                    // src={`http://localhost:5000/api/stream-video/${video._id}`}
                     type="video/mp4"
                   />
                   Your browser does not support the video tag.
