@@ -27,6 +27,7 @@ const Video = mongoose.model(
 );
 
 // Middlewares
+app.use(require('express-status-monitor')());
 app.use(
   cors({
     origin: "*",
