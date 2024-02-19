@@ -7,10 +7,13 @@ const fs = require("fs");
 const request = require("request");
 const axios = require("axios");
 const { Transform } = require("stream");
+const util = require("util");
+const exec = util.promisify(require("child_process").exec);
+const { stat } = fs.promises;
 
 // Connect to database
 const connectDb = async () =>
-  await mongoose.connect("mongodb://127.0.0.1:27017/video-app-demo");
+  await mongoose.connect("mongodb+srv://rajpadval145:rajpadval145@cluster0.pmznzkg.mongodb.net/video-app?retryWrites=true&w=majority");
 connectDb();
 
 // Video model
@@ -56,7 +59,36 @@ const upload = multer({
   storage: multer.memoryStorage(),
 });
 
-// Routes
+// Define function to transcode video into multiple resolutions
+async function transcodeVideo(inputPath, outputPath) {
+  try {
+    const resolutions = ["1920x1080", "1280x720", "854x480", "640x360"];
+    for (const resolution of resolutions) {
+      const command = `ffmpeg -i ${inputPath} -vf scale=${resolution} -c:a copy ${outputPath}-${resolution}.mp4`;
+      await exec(command);
+    }
+    console.log("Video transcoding complete.");
+
+    // Count the number of transcoded files
+    const files = await fs.promises.readdir(".");
+    const transcodedFiles = files.filter(file => file.startsWith(outputPath));
+    console.log("Number of transcoded files:", transcodedFiles.length);
+
+    // Calculate storage utilization of transcoded files
+    let totalSize = 0;
+    for (const file of transcodedFiles) {
+      const fileStats = await stat(file);
+      totalSize += fileStats.size;
+    }
+    const totalSizeInMB = totalSize / (1024 * 1024);
+    console.log("Total storage utilized by transcoded files:", totalSizeInMB.toFixed(2), "MB");
+  } catch (error) {
+    console.error("Error transcoding video:", error);
+    throw error;
+  }
+}
+
+// Route for uploading video with automatic transcoding
 app.post(
   "/api/post-video",
   upload.fields([
@@ -102,6 +134,9 @@ app.post(
 
       console.log("videoUrl : ", videoUrl, "thumbnailUrl : ", thumbnailUrl);
 
+      // Transcode uploaded video into multiple resolutions
+      await transcodeVideo(videoFile.originalname, videoUrl);
+
       const video = new Video({
         title: req.body.title,
         videoUrl,
@@ -135,7 +170,6 @@ app.get("/api/get-videos", async (req, res) => {
   });
 });
 
-
 app.get("/api/stream-video/:videoId", async (req, res) => {
   const video = await Video.findById(req.params.videoId);
   if (!video) {
@@ -157,7 +191,8 @@ app.get("/api/stream-video/:videoId", async (req, res) => {
         },
       };
 
-      request.get(options)
+      request
+        .get(options)
         .on("error", (error) => {
           console.error("Error streaming video:", error);
           res.status(500).json({
@@ -172,10 +207,15 @@ app.get("/api/stream-video/:videoId", async (req, res) => {
       response.on("response", (videoResponse) => {
         if (videoResponse.headers["content-length"]) {
           res.setHeader("Content-Type", "video/mp4");
-          res.setHeader("Content-Length", videoResponse.headers["content-length"]);
+          res.setHeader(
+            "Content-Length",
+            videoResponse.headers["content-length"]
+          );
           response.pipe(res);
         } else {
-          console.error("Error streaming video: Content-Length header not found");
+          console.error(
+            "Error streaming video: Content-Length header not found"
+          );
           res.status(500).json({
             success: false,
             message: "Error streaming video: Content-Length header not found",
