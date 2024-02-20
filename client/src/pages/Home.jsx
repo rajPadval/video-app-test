@@ -2,6 +2,7 @@ import axios from "axios";
 import { useState, useEffect } from "react";
 import AliceCarousel from "react-alice-carousel";
 import "react-alice-carousel/lib/alice-carousel.css";
+import Navbar from "./Navbar";
 
 const Home = () => {
   const [videos, setVideos] = useState([]);
@@ -27,9 +28,8 @@ const Home = () => {
 
   return (
     <div className="flex justify-center items-center flex-col w-full h-screen">
-      <h3 className="text-2xl lg:text-4xl font-bold font-sans mt-10 lg:mt-12 hover:text-gray-600 text-green-500">
-        Video Stream Prototype
-      </h3>
+      <Navbar />
+
       <AliceCarousel disableButtonsControls>
         {videos.map((video) => (
           <div key={video._id} style={{ position: "relative" }}>
