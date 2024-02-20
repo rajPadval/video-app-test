@@ -10,6 +10,7 @@ const { Transform } = require("stream");
 const util = require("util");
 const exec = util.promisify(require("child_process").exec);
 const { stat } = fs.promises;
+const zlib = require('zlib');
 
 // Connect to database
 const connectDb = async () =>
@@ -46,12 +47,12 @@ const {
 } = require("firebase/storage");
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAFAKtVcLQQJTs9GMHt_W3oY3t7q9i9ouI",
-  authDomain: "video-streaming-app-81666.firebaseapp.com",
-  projectId: "video-streaming-app-81666",
-  storageBucket: "video-streaming-app-81666.appspot.com",
-  messagingSenderId: "523967552433",
-  appId: "1:523967552433:web:fa26527c8814bc78db7b90",
+  apiKey: "AIzaSyAInHqq0T9GStuJX24KhOeYe_sFHjt9oZU",
+  authDomain: "video-streaming-app-2-bc721.firebaseapp.com",
+  projectId: "video-streaming-app-2-bc721",
+  storageBucket: "video-streaming-app-2-bc721.appspot.com",
+  messagingSenderId: "603950635794",
+  appId: "1:603950635794:web:deb5d1050beb40209eb1cb"
 };
 
 firebase.initializeApp(firebaseConfig);
